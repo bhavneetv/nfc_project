@@ -2,12 +2,28 @@ import ctypes
 import os
 import subprocess
 import time
+import webbrowser
+import logging
+import shutil
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
 
 
 load_dotenv()
+
+# Setup logging to file (for pythonw.exe which has no console)
+log_file = os.path.join(os.path.dirname(__file__), "listener.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler()  # Also print to console if there is one
+    ]
+)
+logger = logging.getLogger(__name__)
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
 USER_ID = os.getenv("USER_ID", "demo-user")
@@ -57,28 +73,52 @@ def run_command(command: str):
     subprocess.Popen(command, shell=True)
 
 
+def start_app(target: str):
+    """Launch app/URL using PowerShell (properly handles user session from background process)."""
+    try:
+        logger.info(f"Starting app/URL: {target}")
+        
+        if target.startswith(('http://', 'https://')):
+            # URLs - open with default browser via PowerShell
+            cmd = f'powershell -NoProfile -WindowStyle Hidden -Command "Start-Process \'{target}\'"'
+        elif target == 'spotify':
+            cmd = f'powershell -NoProfile -WindowStyle Hidden -Command "Start-Process \'spotify\'"'
+        elif target == 'code':
+            cmd = f'powershell -NoProfile -WindowStyle Hidden -Command "Start-Process \'code\'"'
+        elif target == 'msedge':
+            cmd = f'powershell -NoProfile -WindowStyle Hidden -Command "Start-Process \'msedge\'"'
+        else:
+            logger.error(f"Unknown app: {target}")
+            return
+        
+        subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+    except Exception as e:
+        logger.error(f"Failed to start '{target}': {e}")
+
+
 def open_youtube():
-    run_command('start msedge "https://www.youtube.com"')
+    start_app('https://www.youtube.com')
 
 
 def open_netflix():
-    run_command('start msedge "https://www.netflix.com"')
+    start_app('https://www.netflix.com')
 
 
 def open_edge():
-    run_command('start msedge')
+    start_app('msedge')
 
 
 def open_vscode():
-    run_command('start code')
+    start_app('code')
 
 
 def open_spotify():
-    run_command('start spotify')
+    start_app('spotify')
 
 
 def open_session_page():
-    run_command(f'start msedge "{SESSION_PAGE_URL}?user_id={USER_ID}"')
+    webbrowser.open(f"{SESSION_PAGE_URL}?user_id={USER_ID}")
 
 
 def enable_focus_mode():
@@ -107,7 +147,7 @@ def execute_mode(mode: str):
 
 
 def main():
-    print("PC listener started")
+    logger.info("PC listener started")
     while True:
         try:
             status = detect_lock_state()
@@ -117,18 +157,18 @@ def main():
             if selector_request and status == "pc_on":
                 open_session_page()
                 ack_selector_request(selector_request["id"])
-                print(f"Opened selector page for request {selector_request['id']}")
+                logger.info(f"Opened selector page for request {selector_request['id']}")
 
             action = get_next_action()
             if action:
                 mode = action.get("mode")
                 execute_mode(mode)
                 ack_action(action["id"])
-                print(f"Executed action {action['id']} mode={mode}")
+                logger.info(f"Executed action {action['id']} mode={mode}")
         except requests.RequestException as ex:
-            print(f"Network error: {ex}")
+            logger.error(f"Network error: {ex}")
         except Exception as ex:
-            print(f"Runtime error: {ex}")
+            logger.error(f"Runtime error: {ex}")
 
         time.sleep(POLL_SECONDS)
 

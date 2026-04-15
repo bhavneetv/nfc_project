@@ -2,6 +2,7 @@ import json
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
+from fastapi.encoders import jsonable_encoder
 from pywebpush import WebPushException, webpush
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
@@ -151,8 +152,10 @@ def send_push_to_user(db: Session, user_id: str, title: str, body: str, extra: O
             "title": title,
             "body": body,
             "url": settings.public_base_url + "/select.html",
-            "extra": extra or {},
-        }
+            # Convert datetime/date and other ORM-native values to JSON-safe values.
+            "extra": jsonable_encoder(extra or {}),
+        },
+        ensure_ascii=False,
     )
 
     sent_count = 0

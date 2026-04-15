@@ -1,5 +1,7 @@
 .venv
 backend/.env
 pc_listener/.env
+pc_listener/.venv_clean
 backend/app/__pycache__
 backend/app/__pycache__/*
+

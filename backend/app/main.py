@@ -48,6 +48,35 @@ static_dir = Path(__file__).resolve().parent.parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
+def _send_session_stopped_push(db: Session, user_id: str, session: SessionModel) -> None:
+    duration_seconds = int(session.duration_seconds or 0)
+    duration_minutes = max(1, int(duration_seconds / 60))
+
+    mode_total_row = (
+        db.query(func.coalesce(func.sum(SessionModel.duration_seconds), 0).label("s"))
+        .filter(
+            SessionModel.user_id == user_id,
+            SessionModel.mode == session.mode,
+            SessionModel.end_time.is_not(None),
+        )
+        .first()
+    )
+    mode_total_seconds = int(mode_total_row.s or 0)
+    mode_total_minutes = max(1, int(mode_total_seconds / 60))
+
+    send_push_to_user(
+        db,
+        user_id,
+        "Session stopped",
+        f"Duration: {duration_minutes} min ({session.mode}) | Total {session.mode}: {mode_total_minutes} min",
+        {
+            "duration_seconds": duration_seconds,
+            "mode": session.mode,
+            "mode_total_seconds": mode_total_seconds,
+        },
+    )
+
+
 @app.get("/health")
 def health_check():
     return {"ok": True, "service": "nfc-productivity-api"}
@@ -132,14 +161,7 @@ def api_stop(payload: StopRequest, db: Session = Depends(get_db)):
 
     db.commit()
 
-    duration_minutes = max(1, int((session.duration_seconds or 0) / 60))
-    send_push_to_user(
-        db,
-        payload.user_id,
-        "Session stopped",
-        f"Duration: {duration_minutes} min ({session.mode})",
-        {"duration_seconds": session.duration_seconds, "mode": session.mode},
-    )
+    _send_session_stopped_push(db, payload.user_id, session)
     db.commit()
 
     return {
@@ -164,14 +186,8 @@ def _handle_nfc_tap(user_id: str, mode: str | None, device_status: str, db: Sess
     if active:
         stopped = stop_session(db, user_id, device_status)
         db.commit()
-        duration_minutes = max(1, int((stopped.duration_seconds or 0) / 60))
-        send_push_to_user(
-            db,
-            user_id,
-            "Session stopped",
-            f"Duration: {duration_minutes} min ({stopped.mode})",
-            {"duration_seconds": stopped.duration_seconds, "mode": stopped.mode},
-        )
+
+        _send_session_stopped_push(db, user_id, stopped)
         db.commit()
         return {
             "action": "stopped",
