@@ -239,3 +239,13 @@ Response includes:
 - `current_streak`
 - `last_5_sessions`
 - `pie` (`study`, `coding`, `fun` percentages)
+
+Scriptable setup:
+- Open `widget/scriptable_widget.js` and set `API_BASE` + `USER_ID`.
+- In Scriptable app, create a new script and paste the file content.
+- Add a Scriptable widget to home screen and select that script.
+- Widget requests refresh every 2 minutes (`refreshAfterDate`) and also supports tap-to-refresh.
+
+Notes:
+- iOS may still throttle background refresh sometimes; tap-to-refresh runs immediately.
+- Backend now sends `Cache-Control: no-store` on `/api/widget` to avoid stale cached data.

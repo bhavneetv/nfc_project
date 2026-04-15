@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -90,6 +90,11 @@ def root_redirect():
 @app.get("/select.html")
 def select_page():
     return FileResponse(static_dir / "select.html")
+
+
+@app.get("/logs.html")
+def logs_page():
+    return FileResponse(static_dir / "logs.html")
 
 
 @app.get("/sw.js")
@@ -299,6 +304,93 @@ def api_stats(user_id: str, db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/logs")
+def api_logs(
+    user_id: str,
+    page: int = 1,
+    page_size: int = 20,
+    mode: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    search: str | None = None,
+    db: Session = Depends(get_db),
+):
+    ensure_user(db, user_id)
+
+    safe_page = max(1, int(page))
+    safe_page_size = min(100, max(5, int(page_size)))
+    offset = (safe_page - 1) * safe_page_size
+
+    base_query = db.query(SessionModel).filter(
+        SessionModel.user_id == user_id,
+        SessionModel.end_time.is_not(None),
+    )
+
+    if mode in {"study", "coding", "fun"}:
+        base_query = base_query.filter(SessionModel.mode == mode)
+
+    try:
+        if from_date:
+            start_dt = datetime.strptime(from_date, "%Y-%m-%d")
+            base_query = base_query.filter(SessionModel.start_time >= start_dt)
+        if to_date:
+            end_dt = datetime.strptime(to_date, "%Y-%m-%d") + timedelta(days=1)
+            base_query = base_query.filter(SessionModel.start_time < end_dt)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    if search:
+        s = search.strip().lower()
+        if s in {"study", "coding", "fun"}:
+            base_query = base_query.filter(SessionModel.mode == s)
+        elif s in {"pc_on", "pc_locked", "pc_off"}:
+            base_query = base_query.filter(SessionModel.device_status == s)
+
+    total_items = int(base_query.count())
+    rows = (
+        base_query.order_by(SessionModel.start_time.desc())
+        .offset(offset)
+        .limit(safe_page_size)
+        .all()
+    )
+
+    mode_rows = (
+        base_query.with_entities(
+            SessionModel.mode.label("mode"),
+            func.coalesce(func.sum(SessionModel.duration_seconds), 0).label("seconds"),
+        )
+        .group_by(SessionModel.mode)
+        .all()
+    )
+    mode_totals = {"study": 0, "coding": 0, "fun": 0}
+    for row in mode_rows:
+        mode_totals[row.mode] = int(row.seconds or 0)
+
+    total_pages = max(1, (total_items + safe_page_size - 1) // safe_page_size)
+    active_session = get_active_session(db, user_id)
+
+    return {
+        "items": [to_session_dict(row) for row in rows],
+        "pagination": {
+            "page": safe_page,
+            "page_size": safe_page_size,
+            "total_items": total_items,
+            "total_pages": total_pages,
+            "has_prev": safe_page > 1,
+            "has_next": safe_page < total_pages,
+        },
+        "mode_totals_seconds": mode_totals,
+        "daily_breakdown": get_last_7_days_breakdown(db, user_id),
+        "active_session": to_session_dict(active_session) if active_session else None,
+        "applied_filters": {
+            "mode": mode,
+            "from_date": from_date,
+            "to_date": to_date,
+            "search": search,
+        },
+    }
+
+
 @app.get("/api/weekly", response_model=WeeklyResponse)
 def api_weekly(user_id: str, db: Session = Depends(get_db)):
     now = datetime.utcnow()
@@ -430,8 +522,15 @@ def notify_daily(user_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/widget", response_model=WidgetResponse)
-def api_widget(user_id: str, db: Session = Depends(get_db)):
+def api_widget(user_id: str, response: Response, db: Session = Depends(get_db)):
+    # Prevent CDN/browser caching so widgets fetch fresh state.
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
     today = datetime.utcnow().date()
+    now = datetime.utcnow()
+    today_start = datetime.combine(today, datetime.min.time())
     today_row = (
         db.query(func.coalesce(func.sum(SessionModel.duration_seconds), 0).label("s"))
         .filter(
@@ -468,10 +567,28 @@ def api_widget(user_id: str, db: Session = Depends(get_db)):
         .scalar()
     )
 
+    active = get_active_session(db, user_id)
+    active_today_seconds = 0
+    active_total_seconds = 0
+    if active:
+        active_start = active.start_time
+        if getattr(active_start, "tzinfo", None) is not None:
+            active_start = active_start.replace(tzinfo=None)
+
+        active_total_seconds = max(0, int((now - active_start).total_seconds()))
+        active_today_seconds = max(0, int((now - max(active_start, today_start)).total_seconds()))
+
+        if active.mode == "study":
+            study = int(study or 0) + active_total_seconds
+        elif active.mode == "coding":
+            coding = int(coding or 0) + active_total_seconds
+        elif active.mode == "fun":
+            fun = int(fun or 0) + active_total_seconds
+
     total = max(1, int((study or 0) + (coding or 0) + (fun or 0)))
 
     return {
-        "today_total_seconds": int(today_row.s or 0),
+        "today_total_seconds": int(today_row.s or 0) + active_today_seconds,
         "current_streak": streak.current_streak if streak else 0,
         "last_5_sessions": [to_session_dict(s) for s in last_5],
         "pie": {
@@ -479,6 +596,8 @@ def api_widget(user_id: str, db: Session = Depends(get_db)):
             "coding": round((int(coding or 0) / total) * 100, 2),
             "fun": round((int(fun or 0) / total) * 100, 2),
         },
+        "active_session": to_session_dict(active) if active else None,
+        "server_time": now,
     }
 
 

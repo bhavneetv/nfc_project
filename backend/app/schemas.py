@@ -74,3 +74,5 @@ class WidgetResponse(BaseModel):
     current_streak: int
     last_5_sessions: list[SessionOut]
     pie: dict
+    active_session: Optional[SessionOut] = None
+    server_time: datetime

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Session Logs</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-a: #f8fafc;
+      --bg-b: #dbeafe;
+      --ink: #0f172a;
+      --sub: #334155;
+      --card: rgba(255, 255, 255, 0.92);
+      --line: #cbd5e1;
+      --study: #2563eb;
+      --coding: #059669;
+      --fun: #ea580c;
+      --accent: #0f766e;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "Segoe UI", "Tahoma", sans-serif;
+      background:
+        radial-gradient(circle at 10% 10%, rgba(37, 99, 235, 0.16), transparent 36%),
+        radial-gradient(circle at 85% 15%, rgba(5, 150, 105, 0.16), transparent 34%),
+        linear-gradient(150deg, var(--bg-a), var(--bg-b));
+      padding: 16px;
+    }
+
+    .wrap {
+      width: min(1200px, 100%);
+      margin: 0 auto;
+      display: grid;
+      gap: 12px;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 16px;
+      backdrop-filter: blur(8px);
+      padding: 14px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.5rem;
+    }
+
+    .sub {
+      margin: 0;
+      color: var(--sub);
+      font-size: 0.95rem;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      align-items: center;
+    }
+
+    input, select, button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.95rem;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 700;
+      color: white;
+      background: var(--accent);
+      border: none;
+    }
+
+    .ghost {
+      background: #475569;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .chart-wrap {
+      position: relative;
+      min-height: 260px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 420px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+    }
+
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #e2e8f0;
+      text-align: left;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f1f5f9;
+      color: #1e293b;
+    }
+
+    .mode {
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .mode-study { color: var(--study); }
+    .mode-coding { color: var(--coding); }
+    .mode-fun { color: var(--fun); }
+
+    .pager {
+      margin-top: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .muted { color: var(--sub); font-size: 0.9rem; }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .toolbar { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      .toolbar { grid-template-columns: 1fr; }
+      th, td { font-size: 0.82rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="panel">
+      <h1>Detailed Session Logs</h1>
+      <p class="sub">View all sessions with mode, start/end times, duration, and trend charts.</p>
+    </section>
+
+    <section class="panel toolbar">
+      <input id="userId" placeholder="User ID" />
+      <select id="modeFilter">
+        <option value="">All modes</option>
+        <option value="study">Study</option>
+        <option value="coding">Coding</option>
+        <option value="fun">Fun</option>
+      </select>
+      <input id="fromDate" type="date" />
+      <input id="toDate" type="date" />
+      <input id="searchText" placeholder="Search mode/device (study, pc_on)" />
+      <select id="pageSize">
+        <option value="10">10 / page</option>
+        <option value="20" selected>20 / page</option>
+        <option value="50">50 / page</option>
+      </select>
+      <button id="reloadBtn">Reload</button>
+      <button id="clearBtn" class="ghost">Clear</button>
+      <button id="backBtn" class="ghost">Back</button>
+    </section>
+
+    <section class="grid">
+      <div class="panel chart-wrap"><canvas id="modeChart"></canvas></div>
+      <div class="panel chart-wrap"><canvas id="trendChart"></canvas></div>
+    </section>
+
+    <section class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Mode</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Duration</th>
+              <th>Device</th>
+            </tr>
+          </thead>
+          <tbody id="logsBody"></tbody>
+        </table>
+      </div>
+
+      <div class="pager">
+        <div class="muted" id="pageInfo">Page 1</div>
+        <div>
+          <button id="prevBtn" class="ghost">Prev</button>
+          <button id="nextBtn">Next</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/logs.js"></script>
+</body>
+</html>

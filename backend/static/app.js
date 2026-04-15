@@ -128,9 +128,15 @@ async function stopMode() {
   }
 }
 
+function viewLogs() {
+  const userId = getUserId();
+  window.location.href = `/logs.html?user_id=${encodeURIComponent(userId)}`;
+}
+
 window.startMode = startMode;
 window.stopMode = stopMode;
 window.enableNotifications = enableNotifications;
+window.viewLogs = viewLogs;
 
 (async () => {
   try {

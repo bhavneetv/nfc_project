@@ -30,3 +30,12 @@
 2026-04-15 15:59:48,545 - INFO - Starting app/URL: msedge
 2026-04-15 15:59:48,633 - INFO - Executed action 23 mode=fun
 2026-04-15 15:59:49,576 - INFO - Executed action 23 mode=fun
+2026-04-15 16:14:23,430 - INFO - Opened selector page for request 10
+2026-04-15 16:14:23,803 - INFO - Opened selector page for request 10
+2026-04-15 16:14:24,287 - INFO - Opened selector page for request 10
+2026-04-15 16:14:24,480 - INFO - Opened selector page for request 10
+2026-04-15 16:14:25,034 - INFO - Opened selector page for request 10
+2026-04-15 16:14:40,670 - INFO - Starting app: cmd.exe /c start msedge "https://www.youtube.com"
+2026-04-15 16:14:40,819 - INFO - Starting app/URL: https://www.youtube.com
+2026-04-15 16:14:41,785 - INFO - Executed action 24 mode=study
+2026-04-15 16:14:41,838 - INFO - Executed action 24 mode=study
