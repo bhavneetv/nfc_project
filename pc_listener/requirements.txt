@@ -1,0 +1,4 @@
+requests==2.32.3
+python-dotenv==1.0.1
+pywin32==306
+psutil==6.0.0

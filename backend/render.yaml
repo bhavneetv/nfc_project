@@ -1,0 +1,61 @@
+services:
+  - type: web
+    name: nfc-productivity-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.10
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:admin@example.com
+      - key: DEFAULT_USER_ID
+        value: demo-user
+
+  - type: cron
+    name: nfc-keepalive-ping
+    runtime: python
+    schedule: "*/4 * * * *"
+    rootDir: scripts
+    buildCommand: pip install requests
+    startCommand: python keep_alive.py
+    envVars:
+      - key: PING_URL
+        sync: false
+
+  - type: cron
+    name: nfc-notify-daily
+    runtime: python
+    schedule: "0 21 * * *"
+    rootDir: scripts
+    buildCommand: pip install requests
+    startCommand: python notify_daily.py
+    envVars:
+      - key: API_BASE_URL
+        sync: false
+      - key: USER_ID
+        value: demo-user
+
+  - type: cron
+    name: nfc-notify-weekly
+    runtime: python
+    schedule: "0 21 * * 0"
+    rootDir: scripts
+    buildCommand: pip install requests
+    startCommand: python notify_weekly.py
+    envVars:
+      - key: API_BASE_URL
+        sync: false
+      - key: USER_ID
+        value: demo-user
