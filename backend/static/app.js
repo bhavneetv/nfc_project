@@ -1,5 +1,6 @@
 const statusEl = document.getElementById("status");
 const userInput = document.getElementById("userId");
+const enableNotificationsBtn = document.getElementById("enableNotificationsBtn");
 
 let config = { vapidPublicKey: "", defaultUserId: "demo-user" };
 const params = new URLSearchParams(window.location.search);
@@ -47,6 +48,35 @@ async function subscribePush() {
       keys: subJson.keys,
     }),
   });
+}
+
+function isStandalonePwa() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+async function enableNotifications() {
+  try {
+    if (!isStandalonePwa()) {
+      setStatus("Open this app from Home Screen first, then tap Enable Notifications.");
+      return;
+    }
+    if (!("Notification" in window)) {
+      setStatus("Notifications are not supported in this browser.");
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      setStatus("Notification permission denied.");
+      return;
+    }
+
+    await subscribePush();
+    if (enableNotificationsBtn) enableNotificationsBtn.style.display = "none";
+    setStatus("Notifications enabled.");
+  } catch (err) {
+    setStatus(`Notification setup error: ${err.message}`);
+  }
 }
 
 async function loadConfig() {
@@ -100,12 +130,21 @@ async function stopMode() {
 
 window.startMode = startMode;
 window.stopMode = stopMode;
+window.enableNotifications = enableNotifications;
 
 (async () => {
   try {
     await loadConfig();
-    await subscribePush();
-    setStatus("Ready");
+
+    if ("Notification" in window && Notification.permission === "granted") {
+      await subscribePush();
+      if (enableNotificationsBtn) enableNotificationsBtn.style.display = "none";
+      setStatus("Ready (notifications enabled)");
+      return;
+    }
+
+    if (enableNotificationsBtn) enableNotificationsBtn.style.display = "block";
+    setStatus("Tap Enable Notifications to allow push.");
   } catch (err) {
     setStatus(`Init error: ${err.message}`);
   }

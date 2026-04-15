@@ -82,6 +82,7 @@
     .coding { background: var(--coding); }
     .fun { background: var(--fun); }
     .stop { background: #7c3aed; }
+    .notify { background: #0f766e; }
 
     .footer {
       margin-top: 14px;
@@ -119,6 +120,7 @@
     </div>
 
     <div class="grid" style="margin-top:12px;">
+      <button id="enableNotificationsBtn" class="notify" onclick="enableNotifications()">Enable Notifications</button>
       <button class="study" onclick="startMode('study')">Study</button>
       <button class="coding" onclick="startMode('coding')">Coding</button>
       <button class="fun" onclick="startMode('fun')">Fun</button>
